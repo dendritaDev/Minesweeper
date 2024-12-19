@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -9,29 +7,18 @@ public class Cell : MonoBehaviour
     public Sprite[] emptyTextures;
     public Sprite mineTexture;
 
-    // Start is called before the first frame update
-    void Start()
+    BoardManager board;
+
+    public void Init(BoardManager boardManager, bool mine)
     {
-        hasMine = (Random.value < 0.15); //Random.value te devuelve un float entre 0-1 con distribución uniforme
-                                         //Por tanto con este 0.15, hacemos que aproximadamente del numero total de celdas que hay
-                                         //el 15% sean minas
-
-        int x = (int)this.transform.position.x;
-        int y = (int)this.transform.parent.transform.position.y;//Como las he agruado por filas, es el padre de las celdas de cada fila quien tiene la posicion en Y
-
-        GridHelper.cells[x, y] = this; //en vez de rellenar la matriz con el manager, llamo a todas las celdas para que rellenen su posicion
-
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-        
+        this.board = boardManager;
+        this.hasMine = mine;
+        // asignas textura inicial si lo deseas
     }
 
     public void LoadTexture(int adjacentCount)
     {
-        if(hasMine)
+        if (hasMine)
         {
             GetComponent<SpriteRenderer>().sprite = mineTexture;
         }
@@ -41,45 +28,51 @@ public class Cell : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Chequear que la celda esta tapada y no ha sido destapada
-    /// </summary>
-    /// <returns></returns>
     public bool IsCovered()
     {
         return GetComponent<SpriteRenderer>().sprite.name == "minesweeper_12";
     }
 
-    //Es como un mouseUP+mouseDown
     private void OnMouseUpAsButton()
     {
-
         if (hasMine)
         {
-            GridHelper.UncoverAllTheMines();
+            board.UncoverAllMines();
             Debug.Log("Has perdido. Fin de la partida");
-            Invoke(nameof(ReturnToMainMenu), 1.5f);
+            board.OnGameEnd(false, board.botManager);
         }
         else
         {
-            int x = (int)this.transform.position.x;
-            int y = (int)this.transform.position.y;
+            int x = (int)this.transform.localPosition.x;
+            int y = (int)this.transform.localPosition.y;
 
-            LoadTexture(GridHelper.CountAdjacentMines(x, y));
+            LoadTexture(board.CountAdjacentMines(x, y));
+            FloodFillUncover(x, y, new bool[board.width, board.height]);
 
-            GridHelper.FloodFillUncover(x, y, new bool[GridHelper.width, GridHelper.height]);
-
-            if(GridHelper.HasTheGameEnded())
+            if (board.HasTheGameEnded())
             {
                 Debug.Log("Has Ganado.Fin de la partida");
-                Invoke(nameof(ReturnToMainMenu), 1.5f);
+                board.OnGameEnd(true, board.botManager);
             }
-
         }
     }
 
-    private void ReturnToMainMenu()
+    void FloodFillUncover(int x, int y, bool[,] visited)
     {
-        SceneManager.LoadScene("SampleScene");
+        if (x >= 0 && y >= 0 && x < board.width && y < board.height)
+        {
+            if (visited[x, y]) return;
+
+            int adjacentMines = board.CountAdjacentMines(x, y);
+            LoadTexture(adjacentMines);
+            if (adjacentMines > 0) return;
+
+            visited[x, y] = true;
+
+            FloodFillUncover(x - 1, y, visited);
+            FloodFillUncover(x + 1, y, visited);
+            FloodFillUncover(x, y - 1, visited);
+            FloodFillUncover(x, y + 1, visited);
+        }
     }
 }
